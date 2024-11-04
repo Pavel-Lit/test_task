@@ -11,6 +11,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.*;
 
@@ -47,26 +48,27 @@ public class PerformanceTests {
     }
 
     @Test
-    public void testConcurrentRandomRead() throws InterruptedException, ExecutionException {
+    public void testConcurrentRandomRead() throws InterruptedException {
         var entities = repository.findAll();
         var ids = new ArrayList<>(entities.stream().map(SimpleEntity::getId).toList());
 
         var executorService = Executors.newFixedThreadPool(THREAD_COUNT);
-        var futureResults = new ArrayList<>();
-        var responseTimes = new CopyOnWriteArrayList<Long>();
+        var futureResults = new ArrayList<Future<Long>>();
+        var responseTimes = Collections.synchronizedList(new ArrayList<Long>());
 
         var startTime = System.currentTimeMillis();
         for (int i = 0; i < TOTAL_REQUESTS; i++) {
             var randomId = ids.get(ThreadLocalRandom.current().nextInt(ids.size()));
             futureResults.add(executorService.submit(() -> {
                 var startRequestTime = System.nanoTime();
+
                 var response = restTemplate.getForEntity("http://localhost:10000/api/simple/" + randomId, SimpleEntity.class);
 
                 var endRequestTime = System.nanoTime();
                 var duration = TimeUnit.NANOSECONDS.toMillis(endRequestTime - startRequestTime);
                 responseTimes.add(duration);
-                return response.getStatusCode().value() == 200 ? 0L : -1L;
 
+                return response.getStatusCode().value() == 200 ? 0L : -1L;
             }));
         }
 
